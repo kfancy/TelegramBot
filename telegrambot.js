@@ -27,6 +27,7 @@ var TelegramBot = function( token ) {
   this.lastUpdateId = 0;
   this.isPolling = false;
   this.pollMs = 0;
+  this.command_cb = null; // callback to run whenever any successful command is found and ran
   
   var self = this;
   this.getMe().then( function(body) { self.setReady(body) }, console.log );
@@ -41,6 +42,15 @@ TelegramBot.prototype.setReady = function( body ) {
     this.bot_name = body.result.username;
     this.ready    = true;
   }
+}
+
+/*
+ * When created this bot does a 'getMe' to get details on the robot
+ */
+TelegramBot.prototype.onCommandRun = function( cb ) {
+	if (typeof cb == 'function') {
+		this.command_cb = cb;
+	}
 }
 
 /*
@@ -96,9 +106,18 @@ TelegramBot.prototype.onUpdate = function( message ) {
  * Runs the specified command if registered. Name is excluding the / character. 
  */
 TelegramBot.prototype.onCommand = function( id, from, chat, date, args ) {
-  var run = this.commands[args[0]];
-  if ( run != undefined ) 
-    run( id, from, chat, date, args.splice( 1, args.length ) );
+	var run = this.commands[args[0]];
+	if ( run != undefined ) {
+		var args_original = JSON.parse( JSON.stringify(args) )
+			, args_spliced = args.splice( 1, args.length )
+			;
+		run( id, from, chat, date, args_spliced );
+		if (this.command_cb) {
+			this.command_cb( id, from, chat, date, args_original.join(' ') );
+		}
+	} else {
+		this.sendMessage( chat.id, 'Sorry, that command was not found. Try /help.', false, id );
+	}
 }
 
 /*
@@ -210,18 +229,42 @@ TelegramBot.prototype.stopPolling = function() {
  * Stop the polling....
  */
 TelegramBot.prototype.poll = function() {
-	if (!this.isPolling) return false;
-	this.pollInterval = setTimeout(function() {
+	if (!this.isPolling) {
+		console.log('well, we tried to poll, but isPolling is false.');
+		return false;
+	}
+	/*this.pollInterval = */setTimeout(function() {
 		var url = this.buildURI('getUpdates', { offset: this.lastUpdateId });
-		this.httpsRequest(url).then(function() {
+		
+		request( url, function( error, response, body ) {
 			
-			// what did we get?
-			console.log('[Telegram Poll]');
-			console.dir(arguments);
+			if (error) {
+				
+				console.error('ERROR!!! '+error);
+				
+			} else {
+				
+				var payload = typeof body == 'string' ? JSON.parse(body) : body;
+
+				if (payload && payload.ok && payload.result && payload.result.length) {
+
+					this.lastUpdateId = payload.result[ payload.result.length - 1 ].update_id + 1;
+					console.log('just set lastUpdateId to: '+this.lastUpdateId);
+
+					payload.result.forEach(function(item) {
+						console.log('MESSAGE ---------------------------------------------');
+						console.dir(item);
+						this.onUpdate(item.message);
+					}.bind(this));
+				}
+				
+			}
 
 			// keep polling: (maybe do this with setInterval instead...)
 			this.poll();
+
 		}.bind(this));
+
 	}.bind(this), this.pollMs);
 }
 
