@@ -1,4 +1,3 @@
-
 var _       = require('underscore');
 var request = require('request');
 var promise = require('promise'); 
@@ -7,6 +6,7 @@ var TelegramBot = function( token ) {
   this.api_url           = 'https://api.telegram.org/bot' + token;
   this.command_character = '/';
   this.commands  = {};
+
   // Default Functions for logging the actions, override with your own functions
   this.functions = {
     onPlainText:       function( id, from, chat, date, message )  { console.log( "onPlainText", id, from, chat, date, message ); },
@@ -23,6 +23,10 @@ var TelegramBot = function( token ) {
   this.ready = false;
   this.bot_id = -1;
   this.bot_name = "uninitialized";
+
+  this.lastUpdateId = 0;
+  this.isPolling = false;
+  this.pollMs = 0;
   
   var self = this;
   this.getMe().then( function(body) { self.setReady(body) }, console.log );
@@ -174,8 +178,51 @@ TelegramBot.prototype.httpsRequest = function( url ) {
  * Use this method to specify a url and receive incoming updates via an outgoing webhook.
  */
 TelegramBot.prototype.setWebhook = function( url ) {
-  var url = this.buildURI( 'setWebhook', { url: url } );
-  return this.httpsRequest(url);
+	this.isPolling = false;
+	var url = this.buildURI( 'setWebhook', { url: url } );
+	return this.httpsRequest(url);
+}
+
+/*
+ * https://core.telegram.org/bots/api#getUpdates
+ * Use this method to specify a url and receive incoming updates via polling
+ */
+TelegramBot.prototype.startPolling = function( interval_ms ) {
+	interval_ms = interval_ms || 1000; // default: every second
+	this.setWebhook('');
+	this.pollMs = interval_ms;
+	this.isPolling = true;
+  this.poll();
+}
+
+/*
+ * https://core.telegram.org/bots/api#getUpdates
+ * Stop the polling....
+ */
+TelegramBot.prototype.stopPolling = function() {
+	this.pollInterval = 0;
+	this.isPolling = false;
+	if (this.pollInterval) { clearTimeout(this.pollInterval); }
+}
+
+/*
+ * https://core.telegram.org/bots/api#getUpdates
+ * Stop the polling....
+ */
+TelegramBot.prototype.poll = function() {
+	if (!this.isPolling) return false;
+	this.pollInterval = setTimeout(function() {
+		var url = this.buildURI('getUpdates', { offset: this.lastUpdateId });
+		this.httpsRequest(url).then(function() {
+			
+			// what did we get?
+			console.log('[Telegram Poll]');
+			console.dir(arguments);
+
+			// keep polling: (maybe do this with setInterval instead...)
+			this.poll();
+		}.bind(this));
+	}.bind(this), this.pollMs);
 }
 
 /*
@@ -288,4 +335,3 @@ TelegramBot.prototype.sendChatAction = function( chat_id, action ) {
 }
 
 module.exports = TelegramBot;
-
