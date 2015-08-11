@@ -28,9 +28,21 @@ var TelegramBot = function( token ) {
   this.isPolling = false;
   this.pollMs = 0;
   this.command_cb = null; // callback to run whenever any successful command is found and ran
+  this.command_notFound_cb = null; // callback to run whenever /action is called that is not found
+  this.message_pre_cb = null; // callback to run whenever inbound message is found
+
+  this.debug = false;
   
   var self = this;
   this.getMe().then( function(body) { self.setReady(body) }, console.log );
+}
+
+/*
+ * set debug on or off
+ @param status BOOLEAN
+ */
+TelegramBot.prototype.setDebug = function( status ) {
+	this.debug = !!(status); // allow truthy
 }
 
 /*
@@ -45,13 +57,32 @@ TelegramBot.prototype.setReady = function( body ) {
 }
 
 /*
- * When created this bot does a 'getMe' to get details on the robot
+ * callback ran when ANY message (command or otherwise) hits the bot.
+ */
+TelegramBot.prototype.onInboundMessage = function( cb ) {
+	if (typeof cb == 'function') {
+		this.message_pre_cb = cb;
+	}
+}
+
+/*
+ * callback ran when someone submits a /command
  */
 TelegramBot.prototype.onCommandRun = function( cb ) {
 	if (typeof cb == 'function') {
 		this.command_cb = cb;
 	}
 }
+
+/*
+ * callback ran when someone submits a /command
+ */
+TelegramBot.prototype.onCommandNotFound = function( cb ) {
+	if (typeof cb == 'function') {
+		this.command_notFound_cb = cb;
+	}
+}
+
 
 /*
  * https://core.telegram.org/bots/api#setwebhook
@@ -64,6 +95,15 @@ TelegramBot.prototype.onUpdate = function( message ) {
   var date = message.date;
   var chat = message.chat;
   if ( this.ready == true ) {
+
+  	// hook to pre-process (or otherwise track) an inbound message
+  	if (this.message_pre_cb) {
+  		var _m = this.message_pre_cb(message);
+  		if (_m && _m.transcript_ts) {
+  			chat.transcript_ts = _m.transcript_ts;
+  		}
+  	}
+
     if ( this.isChat(message) && this.isCommand(message) ) {
       this.onCommand( id, from, chat, date, this.parseArguments(message.text) );
     }
@@ -106,17 +146,22 @@ TelegramBot.prototype.onUpdate = function( message ) {
  * Runs the specified command if registered. Name is excluding the / character. 
  */
 TelegramBot.prototype.onCommand = function( id, from, chat, date, args ) {
-	var run = this.commands[args[0]];
+	var run = this.commands[args[0]]
+		, args_original = JSON.parse( JSON.stringify(args) )
+		, args_spliced = args.splice( 1, args.length )
+		;
+
 	if ( run != undefined ) {
-		var args_original = JSON.parse( JSON.stringify(args) )
-			, args_spliced = args.splice( 1, args.length )
-			;
 		run( id, from, chat, date, args_spliced );
 		if (this.command_cb) {
 			this.command_cb( id, from, chat, date, args_original.join(' ') );
 		}
 	} else {
-		this.sendMessage( chat.id, 'Sorry, that command was not found. Try /help.', false, id );
+		if (this.command_notFound_cb) {
+			this.command_notFound_cb( id, from, chat, date, args_original.join(' ') );
+		} else {
+			this.sendMessage( chat.id, 'Sorry, that command was not found. Try /help.', false, id );
+		}
 	}
 }
 
@@ -186,8 +231,19 @@ TelegramBot.prototype.buildURI = function( resource, params ) {
 TelegramBot.prototype.httpsRequest = function( url ) {
   return new promise( function(fulfill, reject) {
     request( url, function( error, response, body ) {
-      if(error) reject(error);
-      else fulfill(JSON.parse(body));
+      if(error) {
+      	if (this.debug) {
+			console.log('[ERROR IN BOT SEND]');
+			console.log(error);
+		}
+      	reject(error)
+      } else {
+      	if (this.debug) {
+			console.log('[BOT SEND is ok -- response]');
+			console.log(body);
+		}
+      	fulfill(JSON.parse(body));
+      }
     });
   });
 }
@@ -230,7 +286,7 @@ TelegramBot.prototype.stopPolling = function() {
  */
 TelegramBot.prototype.poll = function() {
 	if (!this.isPolling) {
-		console.log('well, we tried to poll, but isPolling is false.');
+		//console.log('well, we tried to poll, but isPolling is false.');
 		return false;
 	}
 	/*this.pollInterval = */setTimeout(function() {
@@ -249,13 +305,20 @@ TelegramBot.prototype.poll = function() {
 				if (payload && payload.ok && payload.result && payload.result.length) {
 
 					this.lastUpdateId = payload.result[ payload.result.length - 1 ].update_id + 1;
-					console.log('just set lastUpdateId to: '+this.lastUpdateId);
+					//console.log('just set lastUpdateId to: '+this.lastUpdateId);
 
 					payload.result.forEach(function(item) {
-						console.log('MESSAGE ---------------------------------------------');
-						console.dir(item);
+						if (this.debug) {
+							console.log('MESSAGE ---------------------------------------------');
+							console.dir(item);
+						}
 						this.onUpdate(item.message);
 					}.bind(this));
+				} else {
+					if (this.debug) {
+						console.log('payload was not ok, check raw body:');
+						console.log(body);
+					}
 				}
 				
 			}
@@ -289,7 +352,9 @@ TelegramBot.prototype.sendMessage = function( chat_id, text, disable_web_page_pr
     params.reply_to_message_id = reply_to_message_id;
   if ( reply_markup != undefined ) 
     params.reply_markup = reply_markup;
-  return this.httpsRequest( this.buildURI( 'sendMessage', params ) );
+    var URL = this.buildURI( 'sendMessage', params )
+    console.log('[ TelegramBot.prototype.sendMessage ] URL: '+URL);
+  return this.httpsRequest( URL );
 }
 
 /*
