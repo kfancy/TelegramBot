@@ -98,47 +98,72 @@ TelegramBot.prototype.onUpdate = function( message ) {
 
   	// hook to pre-process (or otherwise track) an inbound message
   	if (this.message_pre_cb) {
-  		var _m = this.message_pre_cb(message);
-  		if (_m && _m.transcript_ts) {
-  			chat.transcript_ts = _m.transcript_ts;
-  		}
-  	}
+  		this.message_pre_cb(message, function(err, _m) {
+  			
+  			if (err) {
 
-    if ( this.isChat(message) && this.isCommand(message) ) {
-      this.onCommand( id, from, chat, date, this.parseArguments(message.text) );
-    }
-    else {
-      if ( this.isChat(message) ) {
-        this.functions.onPlainText( id, from, chat, date, message.text );
-      }
-      else if ( message.audio != undefined ) {
-        this.functions.onAudio( id, from, chat, date, message.audio );
-      }
-      else if ( message.document != undefined ) {
-        this.functions.onDocument( id, from, chat, date, message.document );
-      }
-      else if ( message.photo != undefined ) {
-        this.functions.onPhoto( id, from, chat, date, message.photo );
-      }
-      else if ( message.sticker != undefined ) {
-        this.functions.onSticker( id, from, chat, date, message.sticker );
-      }
-      else if ( message.video != undefined ) {
-        this.functions.onVideo( id, from, chat, date, message.video );
-      }
-      else if ( message.contact != undefined ) {
-        this.functions.onContact( id, from, chat, date, message.contact );
-      }
-      else if ( message.location != undefined ) {
-        this.functions.onLocation( id, from, chat, date, message.location );
-      }
-      else if ( message.new_chat_participant != undefined ) {
-        this.functions.onNewParticipant( id, from, chat, date, message.new_chat_participant );
-      }
-      else if ( message.left_chat_participant != undefined ) {
-        this.functions.onLeftParticipant( id, from, chat, date, message.left_chat_participant );
-      } 
-    }
+				if (this.debug) {
+					console.log('error pre-processing message!');
+					console.log(err);
+				}
+				// something funny happened, just pass the original through.
+				process_message.call(this, message);
+  			
+  			} else {
+  			
+				if (_m && _m.transcript_ts) {
+					chat.transcript_ts = _m.transcript_ts;
+					process_message.call(this, _m);
+				} else {
+					// something funny happened, just pass the original through.
+					process_message.call(this, message);
+				}
+			}
+			
+  		}.bind(this));
+
+  	} else {
+  		process_message(message);
+  	}
+  	
+  	function process_message(message) {
+
+		if ( this.isChat(message) && this.isCommand(message) ) {
+		  this.onCommand( id, from, chat, date, this.parseArguments(message.text) );
+		}
+		else {
+		  if ( this.isChat(message) ) {
+			this.functions.onPlainText( id, from, chat, date, message.text );
+		  }
+		  else if ( message.audio != undefined ) {
+			this.functions.onAudio( id, from, chat, date, message.audio );
+		  }
+		  else if ( message.document != undefined ) {
+			this.functions.onDocument( id, from, chat, date, message.document );
+		  }
+		  else if ( message.photo != undefined ) {
+			this.functions.onPhoto( id, from, chat, date, message.photo );
+		  }
+		  else if ( message.sticker != undefined ) {
+			this.functions.onSticker( id, from, chat, date, message.sticker );
+		  }
+		  else if ( message.video != undefined ) {
+			this.functions.onVideo( id, from, chat, date, message.video );
+		  }
+		  else if ( message.contact != undefined ) {
+			this.functions.onContact( id, from, chat, date, message.contact );
+		  }
+		  else if ( message.location != undefined ) {
+			this.functions.onLocation( id, from, chat, date, message.location );
+		  }
+		  else if ( message.new_chat_participant != undefined ) {
+			this.functions.onNewParticipant( id, from, chat, date, message.new_chat_participant );
+		  }
+		  else if ( message.left_chat_participant != undefined ) {
+			this.functions.onLeftParticipant( id, from, chat, date, message.left_chat_participant );
+		  } 
+		}
+	}
   }
 }
 
