@@ -300,7 +300,11 @@ TelegramBot.prototype.poll = function() {
 				
 			} else {
 				
-				var payload = typeof body == 'string' ? JSON.parse(body) : body;
+				try {
+					var payload = typeof body == 'string' ? JSON.parse(body) : body;
+				} catch (e) {
+					var payload = false;
+				}
 
 				if (payload && payload.ok && payload.result && payload.result.length) {
 
@@ -316,8 +320,8 @@ TelegramBot.prototype.poll = function() {
 					}.bind(this));
 				} else {
 					if (this.debug) {
-						console.log('payload was not ok, check raw body:');
-						console.log(body);
+						console.error('payload was not ok, check raw body:');
+						console.error(body);
 					}
 				}
 				
