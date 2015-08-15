@@ -381,8 +381,10 @@ TelegramBot.prototype.sendMessage = function( chat_id, text, disable_web_page_pr
     params.reply_to_message_id = reply_to_message_id;
   if ( reply_markup != undefined ) 
     params.reply_markup = reply_markup;
-    var URL = this.buildURI( 'sendMessage', params )
-    console.log('[ TelegramBot.prototype.sendMessage ] URL: '+URL);
+  var URL = this.buildURI( 'sendMessage', params )
+  if (this.debug) {
+	console.log('[ TelegramBot.prototype.sendMessage ] URL: '+URL);
+  }
   return this.httpsRequest( URL );
 }
 
