@@ -30,6 +30,7 @@ var TelegramBot = function( token ) {
   this.command_cb = null; // callback to run whenever any successful command is found and ran
   this.command_notFound_cb = null; // callback to run whenever /action is called that is not found
   this.message_pre_cb = null; // callback to run whenever inbound message is found
+  this.bot_ready_cb = null; // callback to run when bot is connected and ready
 
   this.debug = false;
   
@@ -53,7 +54,22 @@ TelegramBot.prototype.setReady = function( body ) {
     this.bot_id   = body.result.id;
     this.bot_name = body.result.username;
     this.ready    = true;
+    if (this.bot_ready_cb) {
+    	this.bot_ready_cb();
+    }
   }
+}
+
+/*
+ * callback ran when bot is connected and ready
+ */
+TelegramBot.prototype.onReady = function( cb ) {
+	if (typeof cb == 'function') {
+		this.bot_ready_cb = cb;
+		if (this.ready) {
+			cb();
+		}
+	}
 }
 
 /*
@@ -269,7 +285,7 @@ TelegramBot.prototype.httpsRequest = function( url ) {
 		}
       	fulfill(JSON.parse(body));
       }
-    });
+    }.bind(this));
   });
 }
 
@@ -343,11 +359,11 @@ TelegramBot.prototype.poll = function() {
 						}
 						this.onUpdate(item.message);
 					}.bind(this));
-				} else {
+				/*} else {
 					if (this.debug) {
 						console.error('payload was not ok, check raw body:');
 						console.error(body);
-					}
+					}*/
 				}
 				
 			}
@@ -381,10 +397,10 @@ TelegramBot.prototype.sendMessage = function( chat_id, text, disable_web_page_pr
     params.reply_to_message_id = reply_to_message_id;
   if ( reply_markup != undefined ) 
     params.reply_markup = reply_markup;
-  var URL = this.buildURI( 'sendMessage', params )
-  if (this.debug) {
-	console.log('[ TelegramBot.prototype.sendMessage ] URL: '+URL);
-  }
+    var URL = this.buildURI( 'sendMessage', params )
+    if (this.debug) {
+	    console.log('[ TelegramBot.prototype.sendMessage ] URL: '+URL);
+	}
   return this.httpsRequest( URL );
 }
 
