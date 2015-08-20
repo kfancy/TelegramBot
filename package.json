@@ -7,7 +7,7 @@
   "author": "Bryan Abrams",
   "repository" : {
     "type" : "git",
-    "url" : "https://github.com/abramsba/TelegramBot"
+    "url" : "https://github.com/kfancy/TelegramBot"
   },
   "license": "BSD",
   "dependencies": {
